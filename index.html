@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extractor de Datos - RUSP</title>
+    <!-- Fuente de Google: Montserrat (Estándar de Diseño Institucional) -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <!-- Guard para compatibilidad con Electron (nodeIntegration) -->
+    <script>
+        if (typeof module === 'object') {
+            window.nodeModule = module;
+            window.nodeExports = exports;
+            window.module = undefined;
+            window.exports = undefined;
+        }
+    </script>
+    <!-- Librerías Externas desde CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+        if (window.nodeModule) {
+            window.module = window.nodeModule;
+            window.exports = window.nodeExports;
+            delete window.nodeModule;
+            delete window.nodeExports;
+        }
+    </script>
+</head>
+<body>
+    <!-- Encabezado Institucional -->
+    <header class="gob-header">
+        <div class="header-content">
+            <div>
+                <h1 class="title">Extractor de Datos - RUSP</h1>
+                <p class="subtitle">Herramienta de Depuración de Puestos, Conciliación de Sueldo + Compensación y Cálculo de Fechas Reales</p>
+            </div>
+            <div class="header-right-group">
+                <div class="header-badge" id="app-version-badge">
+                    v1.0.0
+                </div>
+                <button id="btn-check-update" class="btn-check-update" type="button" title="Buscar actualización en GitHub">
+                    <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>Buscar actualización</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Contenedor de Alertas Dinámicas -->
+        <div id="alert-box" class="alert-container hidden"></div>
+
+        <!-- Módulo de Carga (Card 1) -->
+        <section class="card upload-section" id="drop-zone">
+            <!-- Banner Informativo / Sugerencia de Carga -->
+            <div class="info-suggestion-box">
+                <div class="info-suggestion-content">
+                    <span class="info-suggestion-icon">💡</span>
+                    <div>
+                        <strong>Sugerencia de Carga:</strong> Se recomienda subir el archivo Excel descargado directamente del sistema <em>RUSP</em> (sin modificaciones previas) para garantizar la correcta extracción, depuración de puestos y cálculo de fechas.
+                    </div>
+                </div>
+            </div>
+
+            <div class="upload-icon">
+                <svg width="48" height="48" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                </svg>
+            </div>
+            <h2>Cargar Archivo Excel (.xlsx / .xls)</h2>
+            <p>Arrastra tu archivo Excel aquí o utiliza el botón para seleccionar tu documento.</p>
+            <input type="file" id="file-input" accept=".xlsx, .xls" hidden>
+            
+            <div class="button-group">
+                <button id="btn-select-file" class="btn-primary">
+                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"></path>
+                    </svg>
+                    Seleccionar Archivo Excel
+                </button>
+            </div>
+
+            <!-- Spinner e Indicador de Carga -->
+            <div id="loading" class="hidden">
+                <div class="spinner"></div>
+                <p>Analizando hojas de cálculo, depurando puestos y calculando fechas reales...</p>
+            </div>
+        </section>
+
+        <!-- Módulo de Resultados (Oculto hasta procesar un Excel) -->
+        <section id="results-section" class="hidden">
+            <!-- Card 2: Resultado de Procesamiento -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Resultado del Procesamiento</h2>
+                </div>
+                <div id="stats-container" class="stats-grid">
+                    <!-- Generado dinámicamente -->
+                </div>
+            </div>
+
+            <!-- Card 3: Vista Previa de Tabla -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="title-with-badge">
+                        <h2>Vista Previa de Registros (<span id="version-label">RUSP Simplificado</span>)</h2>
+                        <span id="active-version-badge" class="badge-version badge-original">Original</span>
+                    </div>
+                </div>
+
+                <!-- Banner Informativo del Modo de Edición -->
+                <div id="edit-mode-banner" class="edit-banner hidden">
+                    <div class="edit-banner-content">
+                        <span class="edit-banner-icon">✏️</span>
+                        <div>
+                            <strong>Modo de Edición Activo:</strong> Puedes modificar el <em>Nombre de Puesto</em>, <em>Institución</em> y <em>UR (ur_reportada)</em> directamente en la tabla. Al guardar, se homologarán automáticamente las fechas. Si activas la casilla <strong>"Homologar por UR"</strong>, se considerarán puestos diferentes aquellos que tengan el mismo nombre pero diferente UR; de lo contrario, la UR actualizará su texto sin afectar la homologación de fechas.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-toolbar">
+                    <div class="search-box">
+                        <input type="text" id="table-search" placeholder="🔍 Buscar por puesto, entidad o monto...">
+                    </div>
+                    <div class="toolbar-controls">
+                        <label class="toggle-checkbox-label" for="chk-show-ur">
+                            <input type="checkbox" id="chk-show-ur" checked>
+                            <span>Ver UR (ur_reportada)</span>
+                        </label>
+                        <label class="toggle-checkbox-label hidden" id="wrapper-homologate-ur" for="chk-homologate-ur" title="Si se activa, los puestos con diferente UR se considerarán puestos distintos al homologar">
+                            <input type="checkbox" id="chk-homologate-ur">
+                            <span>Homologar por UR</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table id="preview-table">
+                        <thead>
+                            <!-- Generado dinámicamente -->
+                        </thead>
+                        <tbody>
+                            <!-- Generado dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="table-pagination" class="pagination-container">
+                    <!-- Paginación dinámica -->
+                </div>
+            </div>
+
+            <!-- Barra de Acciones y Exportación -->
+            <div class="action-bar">
+                <!-- Botones Modos Normal / Edición -->
+                <button id="btn-download-simplificado" class="btn-main-green">
+                    <svg width="22" height="22" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span id="download-btn-text">DESCARGAR RUSP SIMPLIFICADO</span>
+                </button>
+
+                <button id="btn-edit-simplificado" class="btn-secondary-edit" type="button">
+                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path>
+                    </svg>
+                    EDITAR RUSP SIMPLIFICADO
+                </button>
+
+                <button id="btn-save-edit" class="btn-main-green hidden" type="button">
+                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                    </svg>
+                    GUARDAR Y HOMOLOGAR
+                </button>
+
+                <button id="btn-cancel-edit" class="btn-outline hidden" type="button">
+                    ❌ CANCELAR EDICIÓN
+                </button>
+
+                <button id="btn-toggle-version" class="btn-version-toggle hidden" type="button">
+                    🔄 Ver Versión Original
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <footer class="gob-footer">
+        <p>Extractor de Datos RUSP — Sistema de Depuración y Conciliación de Datos - SABG</p>
+    </footer>
+
+    <!-- Script Principal ES Modules -->
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+{
+  "name": "extractor-procesador-rusp",
+  "description": "Herramienta para la extracción y procesamiento de datos RUSP",
+  "author": "JOSE CRUZ GOMEZ RODRIGUEZ",
+  "private": true,
+  "version": "1.0.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JoMagistelo/Extractor-RUSP.git"
+  },
+  "main": "main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port=3000 --host=0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "rm -rf dist release server.js",
+    "lint": "tsc --noEmit",
+    "electron:start": "electron .",
+    "electron:build": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.rusp.extractor",
+    "productName": "RUSP Extractor",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "JoMagistelo",
+        "repo": "Extractor-RUSP"
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "index.html",
+      "main.cjs",
+      "css/**/*",
+      "js/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico"
+    }
+  },
+  "dependencies": {
+    "@google/genai": "^2.4.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@vitejs/plugin-react": "^5.0.4",
+    "dotenv": "^17.2.3",
+    "electron-updater": "^6.8.9",
+    "express": "^4.21.2",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "vite": "^6.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "autoprefixer": "^10.4.21",
+    "esbuild": "^0.25.0",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.3",
+    "@types/express": "^4.17.21"
+  }
+}
