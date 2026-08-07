@@ -3,7 +3,11 @@
   "description": "Herramienta para la extracción y procesamiento de datos RUSP",
   "author": "JOSE CRUZ GOMEZ RODRIGUEZ",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JoMagistelo/Extractor-RUSP.git"
+  },
   "main": "main.cjs",
   "type": "module",
   "scripts": {
@@ -17,7 +21,14 @@
   },
   "build": {
     "appId": "com.rusp.extractor",
-    "productName": "ExtractorProcesadorRUSP",
+    "productName": "RUSP Extractor",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "JoMagistelo",
+        "repo": "Extractor-RUSP"
+      }
+    ],
     "directories": {
       "output": "release"
     },
@@ -48,13 +59,14 @@
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
+    "dotenv": "^17.2.3",
+    "electron-updater": "^6.8.9",
+    "express": "^4.21.2",
     "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
-    "vite": "^6.2.3",
-    "express": "^4.21.2",
-    "dotenv": "^17.2.3",
-    "motion": "^12.23.24"
+    "vite": "^6.2.3"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

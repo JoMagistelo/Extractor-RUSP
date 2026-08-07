@@ -73,6 +73,13 @@ body {
     margin-top: 0.25rem;
 }
 
+.header-right-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
 .header-badge {
     background-color: rgba(212, 193, 156, 0.1);
     color: var(--gob-dorado);
@@ -83,6 +90,34 @@ body {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 1px;
+}
+
+.btn-check-update {
+    background-color: var(--gob-verde-dark);
+    color: var(--text-main);
+    border: 1px solid var(--gob-verde);
+    padding: 0.4rem 0.85rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: inherit;
+}
+
+.btn-check-update:hover {
+    background-color: var(--gob-verde);
+    border-color: #34d399;
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(35, 91, 78, 0.4);
+}
+
+.btn-check-update:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 /* ==========================================================================
