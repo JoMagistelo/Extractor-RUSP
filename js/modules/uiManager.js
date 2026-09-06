@@ -12,7 +12,7 @@ const rowsPerPage = 15;
 
 /**
  * Muestra u oculta el indicador de carga (Spinner).
- * @param {boolean} show 
+ * @param {boolean} show
  */
 export function toggleLoading(show) {
     const loadingEl = document.getElementById('loading');
@@ -27,8 +27,8 @@ export function toggleLoading(show) {
 
 /**
  * Muestra un mensaje de alerta (éxito o error) al usuario.
- * @param {string} message 
- * @param {'error'|'success'|'info'} type 
+ * @param {string} message
+ * @param {'error'|'success'|'info'} type
  */
 export function showAlert(message, type = 'error') {
     const alertBox = document.getElementById('alert-box');
@@ -44,7 +44,6 @@ export function showAlert(message, type = 'error') {
     `;
     alertBox.classList.remove('hidden');
 
-    // Auto-scroll a la alerta
     alertBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -60,7 +59,7 @@ export function clearAlert() {
 
 /**
  * Renderiza las tarjetas de estadísticas del procesamiento.
- * @param {{ totalOriginal: number, eliminated: number, preserved: number }} stats 
+ * @param {{ totalOriginal: number, eliminated: number, preserved: number }} stats
  */
 export function renderStats(stats) {
     const statsContainer = document.getElementById('stats-container');
@@ -100,9 +99,9 @@ export function renderStats(stats) {
 
 /**
  * Renderiza la vista previa de la tabla con paginación, búsqueda u opción de edición interactiva.
- * @param {Array<string>} headers 
- * @param {Array<Array>} rows 
- * @param {number} page 
+ * @param {Array<string>} headers
+ * @param {Array<Array>} rows
+ * @param {number} page
  * @param {Object} options - { isEditMode: boolean, onCellChange: Function }
  */
 export function renderPreviewTable(headers, rows, page = 1, options = {}) {
@@ -118,18 +117,15 @@ export function renderPreviewTable(headers, rows, page = 1, options = {}) {
 
     if (!tableHead || !tableBody) return;
 
-    // Norm headers to detect institucion, ur_reportada & nombre_puesto columns
     const normHeaders = headers.map(h => String(h || '').toLowerCase().trim().replace(/_/g, ''));
     const instColIdx = normHeaders.findIndex(h => ['institucion', 'nombreinstitucion', 'entidad', 'inst'].includes(h));
     const urColIdx = normHeaders.findIndex(h => ['urreportada', 'ur', 'unidadresponsable'].includes(h));
     const puestoColIdx = normHeaders.findIndex(h => ['nombrepuesto', 'puesto'].includes(h));
 
-    // Filter non-empty headers (don't render completely empty column headers)
     const displayHeaderIndices = headers
         .map((h, i) => (h && h.trim() !== '' ? i : -1))
         .filter(i => i !== -1);
 
-    // Filter by search term if provided, tracking global indices
     const searchInput = document.getElementById('table-search');
     const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
 
@@ -142,14 +138,12 @@ export function renderPreviewTable(headers, rows, page = 1, options = {}) {
         );
     }
 
-    // Renderizar Encabezados
     tableHead.innerHTML = `
         <tr>
             ${displayHeaderIndices.map(idx => `<th>${headers[idx]}</th>`).join('')}
         </tr>
     `;
 
-    // Calcular Paginación
     const totalRows = filteredIndexedRows.length;
     const totalPages = Math.ceil(totalRows / rowsPerPage) || 1;
     if (currentPage > totalPages) currentPage = totalPages;
@@ -159,7 +153,6 @@ export function renderPreviewTable(headers, rows, page = 1, options = {}) {
     const endIdx = Math.min(startIdx + rowsPerPage, totalRows);
     const pageIndexedRows = filteredIndexedRows.slice(startIdx, endIdx);
 
-    // Renderizar Filas
     if (pageIndexedRows.length === 0) {
         tableBody.innerHTML = `
             <tr>
@@ -178,16 +171,15 @@ export function renderPreviewTable(headers, rows, page = 1, options = {}) {
                     if (isEditableCol) {
                         const escapedVal = String(val).replace(/"/g, '&quot;');
                         return `<td class="editable-td">
-                            <input type="text" 
-                                   class="table-edit-input" 
-                                   data-global-idx="${globalIdx}" 
-                                   data-col-idx="${cIdx}" 
-                                   value="${escapedVal}" 
+                            <input type="text"
+                                   class="table-edit-input"
+                                   data-global-idx="${globalIdx}"
+                                   data-col-idx="${cIdx}"
+                                   value="${escapedVal}"
                                    placeholder="Ingresa valor..." />
                         </td>`;
                     }
 
-                    // Resaltar fechas o montos
                     const isDate = headers[cIdx].includes('Fecha Real');
                     const isSuggested = headers[cIdx].includes('Fecha Sugerida');
                     const isTotal = headers[cIdx] === 'Sueldo + Compensación';
@@ -200,7 +192,6 @@ export function renderPreviewTable(headers, rows, page = 1, options = {}) {
             </tr>
         `).join('');
 
-        // Escuchar cambios de input si estamos en modo edición
         if (isEditMode && onCellChange) {
             tableBody.oninput = (e) => {
                 if (e.target && e.target.classList.contains('table-edit-input')) {
@@ -215,7 +206,6 @@ export function renderPreviewTable(headers, rows, page = 1, options = {}) {
         }
     }
 
-    // Renderizar Paginación UI
     if (paginationEl) {
         paginationEl.innerHTML = `
             <div class="pagination-info">
@@ -234,4 +224,16 @@ export function renderPreviewTable(headers, rows, page = 1, options = {}) {
         if (prevBtn) prevBtn.onclick = () => renderPreviewTable(headers, rows, currentPage - 1, options);
         if (nextBtn) nextBtn.onclick = () => renderPreviewTable(headers, rows, currentPage + 1, options);
     }
+}
+
+/**
+ * Devuelve una copia del conjunto completo que alimenta la tabla activa.
+ * No se limita a la página visible, por lo que puede utilizarse para exportaciones
+ * y acciones de portapapeles sin perder registros por paginación.
+ */
+export function getCurrentTableData() {
+    return {
+        headers: [...currentTableData.headers],
+        rows: currentTableData.rows.map(row => [...row])
+    };
 }

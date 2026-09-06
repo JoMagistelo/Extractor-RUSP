@@ -16,7 +16,8 @@ function createWindow() {
         height: 850,
         minWidth: 900,
         minHeight: 600,
-        title: "Extractor y Procesador de Datos RUSP",
+        title: 'RUSP Extractor Institucional',
+        icon: path.join(__dirname, 'assets', 'icon.ico'),
         autoHideMenuBar: true,
         webPreferences: {
             nodeIntegration: true,
@@ -31,14 +32,14 @@ function createWindow() {
             win.webContents.send('auto-update-status', { status: 'available', version: info.version });
         });
 
-        autoUpdater.on('update-not-available', (info) => {
+        autoUpdater.on('update-not-available', () => {
             win.webContents.send('auto-update-status', { status: 'not-available' });
         });
 
         autoUpdater.on('download-progress', (progressObj) => {
-            win.webContents.send('auto-update-status', { 
-                status: 'downloading', 
-                percent: Math.round(progressObj.percent) 
+            win.webContents.send('auto-update-status', {
+                status: 'downloading',
+                percent: Math.round(progressObj.percent)
             });
         });
 
@@ -58,9 +59,7 @@ ipcMain.on('open-external-url', (event, url) => {
     }
 });
 
-ipcMain.handle('get-app-version', () => {
-    return app.getVersion();
-});
+ipcMain.handle('get-app-version', () => app.getVersion());
 
 ipcMain.handle('trigger-auto-update-check', async () => {
     if (autoUpdater && app.isPackaged) {
@@ -95,4 +94,3 @@ app.on('window-all-closed', () => {
         app.quit();
     }
 });
-

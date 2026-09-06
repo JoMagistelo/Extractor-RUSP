@@ -1,6 +1,0 @@
-{
-  "name": "Extractor Excel Institucional",
-  "description": "Sistema de depuración, conciliación de puestos y cálculo de fechas en archivos Excel con interfaz institucional.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
