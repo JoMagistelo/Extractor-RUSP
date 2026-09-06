@@ -1,0 +1,131 @@
+.source-status-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+    width: min(620px, 100%);
+    margin: 0.55rem auto 0;
+}
+
+.source-status-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    min-width: 0;
+    padding: 0.42rem 0.58rem;
+    border: 1px solid var(--gob-border);
+    border-radius: 6px;
+    background: #FFFFFF;
+    color: var(--gob-text-muted);
+    font-size: 0.72rem;
+}
+
+.source-status-card strong {
+    color: var(--gob-text);
+    font-size: 0.72rem;
+    font-weight: 650;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+}
+
+.source-status-card.loaded {
+    background: var(--gob-green-light);
+    border-color: #C9D8D0;
+}
+
+.source-status-card.imss.loaded {
+    background: #F8F1F2;
+    border-color: #DEC7CA;
+}
+
+.source-status-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.32rem;
+    flex: 0 0 auto;
+    font-weight: 700;
+    color: var(--gob-green-dark);
+}
+
+.source-status-card.imss .source-status-label {
+    color: var(--gob-danger);
+}
+
+.imss-history-card {
+    border-top: 3px solid var(--gob-danger) !important;
+}
+
+.imss-history-card .card-header h2 {
+    color: #7F2C31 !important;
+}
+
+.imss-summary {
+    margin: 0.12rem 0 0 !important;
+    color: var(--gob-text-muted) !important;
+    font-size: 0.74rem !important;
+}
+
+#imss-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #FFFFFF;
+    color: var(--gob-text);
+    font-size: 0.78rem;
+}
+
+#imss-history-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 7px 10px;
+    background: #7F2C31;
+    color: #FFFFFF;
+    border-color: #975259;
+    font-weight: 600;
+    white-space: nowrap;
+    text-align: left;
+}
+
+#imss-history-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #E5E8E6;
+    color: var(--gob-text);
+    background: #FFFFFF;
+    vertical-align: top;
+}
+
+#imss-history-table tr:nth-child(even) td {
+    background: #FCF8F8;
+}
+
+#imss-history-table td.imss-start-date {
+    color: var(--gob-green-dark);
+    background: var(--gob-green-light);
+    font-weight: 700;
+}
+
+#imss-history-table td.imss-end-date {
+    color: var(--gob-danger);
+    background: var(--gob-danger-light);
+    font-weight: 700;
+}
+
+#imss-history-table td.imss-current-date {
+    color: var(--gob-green-dark);
+    background: var(--gob-green-light);
+    font-weight: 700;
+}
+
+.imss-source-note {
+    margin: 0.45rem 0 0;
+    color: var(--gob-text-muted);
+    font-size: 0.7rem;
+}
+
+@media (max-width: 760px) {
+    .source-status-grid {
+        grid-template-columns: 1fr;
+    }
+}
