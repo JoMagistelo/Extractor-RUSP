@@ -114,6 +114,7 @@ export function buildInstitutionalOutput(headers = [], rows = []) {
         rfc: findColumn(headers, ['rfc']),
         curp: findColumn(headers, ['curp']),
         employee: findColumn(headers, ['num_empleado', 'numero_empleado', 'numeroempleado']),
+        personName: findColumn(headers, ['nombre_persona', 'nombre_completo', 'nombre_empleado', 'nombreempleado', 'nombre']),
         institution: findColumn(headers, ['institucion', 'nombre_institucion', 'entidad', 'inst']),
         position: findColumn(headers, ['nombre_puesto', 'nombrepuesto', 'puesto']),
         salary: findColumn(headers, ['Sueldo + Compensación', 'sueldo_compensacion', 'sueldo total']),
@@ -128,6 +129,7 @@ export function buildInstitutionalOutput(headers = [], rows = []) {
             valueAt(row, idx.rfc) ||
             valueAt(row, idx.curp) ||
             valueAt(row, idx.employee) ||
+            valueAt(row, idx.personName) ||
             '__persona_unica__'
         ).trim().toLowerCase();
 
@@ -156,6 +158,7 @@ export function buildInstitutionalOutput(headers = [], rows = []) {
     });
 
     const outputBySourceIndex = new Map();
+    let groupCounter = 0;
 
     byPerson.forEach(items => {
         items.sort((a, b) => (a.sortTime - b.sortTime) || (a.sourceIndex - b.sourceIndex));
@@ -211,24 +214,23 @@ export function buildInstitutionalOutput(headers = [], rows = []) {
                 ''
             ];
 
+            const groupId = `period-${groupCounter++}`;
             item.sourceIndexes.forEach(sourceIndex => {
-                outputBySourceIndex.set(sourceIndex, institutionalRow);
+                outputBySourceIndex.set(sourceIndex, { groupId, row: institutionalRow });
             });
         });
     });
 
-    const seen = new Set();
+    const seenGroups = new Set();
     const outputRows = [];
 
     prepared
         .sort((a, b) => a.sourceIndex - b.sourceIndex)
         .forEach(item => {
-            const row = outputBySourceIndex.get(item.sourceIndex);
-            if (!row) return;
-            const signature = JSON.stringify(row);
-            if (seen.has(signature)) return;
-            seen.add(signature);
-            outputRows.push(row);
+            const output = outputBySourceIndex.get(item.sourceIndex);
+            if (!output || seenGroups.has(output.groupId)) return;
+            seenGroups.add(output.groupId);
+            outputRows.push(output.row);
         });
 
     return {
