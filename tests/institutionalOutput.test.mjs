@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { calculateSuggestedDate } from '../js/modules/dateCalculator.js';
 import {
     buildInstitutionalOutput,
     INSTITUTIONAL_HEADERS,
@@ -18,6 +19,14 @@ test('genera columnas institucionales en el orden solicitado', () => {
         'Fuente(s)',
         'Observaciones'
     ]);
+});
+
+test('normaliza sugerencias de inicio al 16 y término al 15', () => {
+    assert.equal(calculateSuggestedDate('01/01/2025', 'inicio'), '16/01/2025');
+    assert.equal(calculateSuggestedDate('20/01/2025', 'inicio'), '16/02/2025');
+    assert.equal(calculateSuggestedDate('15/01/2025', 'termino'), '15/01/2025');
+    assert.equal(calculateSuggestedDate('16/01/2025', 'termino'), '15/02/2025');
+    assert.equal(calculateSuggestedDate('31/12/2025', 'termino'), '15/01/2026');
 });
 
 test('cierra una baja el 15 y abre la siguiente alta el 16', () => {
