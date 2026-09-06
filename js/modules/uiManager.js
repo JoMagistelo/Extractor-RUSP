@@ -3,12 +3,46 @@
  * Encargado de gestionar la representación gráfica, alertas, animaciones y tablas interactivas en el DOM.
  */
 
+import { smartInstitutionalCase } from './textFormat.js';
+
 let currentTableData = {
     headers: [],
     rows: []
 };
 let currentPage = 1;
 const rowsPerPage = 15;
+
+const HIDDEN_MAIN_HEADERS = new Set([
+    'rfc', 'anio', 'ano', 'year', 'mes', 'month', 'quincena', 'fortnight'
+]);
+
+const SMART_TEXT_HEADERS = new Set([
+    'institucion', 'nombreinstitucion', 'entidad', 'inst', 'nombrepuesto', 'puesto'
+]);
+
+function normalizeHeader(value) {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[\s_-]+/g, '')
+        .trim();
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function displayValue(header, value) {
+    return SMART_TEXT_HEADERS.has(normalizeHeader(header))
+        ? smartInstitutionalCase(value)
+        : value;
+}
 
 /**
  * Muestra u oculta el indicador de carga (Spinner).
@@ -99,6 +133,8 @@ export function renderStats(stats) {
 
 /**
  * Renderiza la vista previa de la tabla con paginación, búsqueda u opción de edición interactiva.
+ * RFC, año, mes y quincena se mantienen internamente para cálculos/exportaciones,
+ * pero no se muestran en la tabla principal.
  * @param {Array<string>} headers
  * @param {Array<Array>} rows
  * @param {number} page
@@ -117,13 +153,13 @@ export function renderPreviewTable(headers, rows, page = 1, options = {}) {
 
     if (!tableHead || !tableBody) return;
 
-    const normHeaders = headers.map(h => String(h || '').toLowerCase().trim().replace(/_/g, ''));
+    const normHeaders = headers.map(normalizeHeader);
     const instColIdx = normHeaders.findIndex(h => ['institucion', 'nombreinstitucion', 'entidad', 'inst'].includes(h));
     const urColIdx = normHeaders.findIndex(h => ['urreportada', 'ur', 'unidadresponsable'].includes(h));
     const puestoColIdx = normHeaders.findIndex(h => ['nombrepuesto', 'puesto'].includes(h));
 
     const displayHeaderIndices = headers
-        .map((h, i) => (h && h.trim() !== '' ? i : -1))
+        .map((h, i) => (h && h.trim() !== '' && !HIDDEN_MAIN_HEADERS.has(normHeaders[i]) ? i : -1))
         .filter(i => i !== -1);
 
     const searchInput = document.getElementById('table-search');
@@ -134,13 +170,13 @@ export function renderPreviewTable(headers, rows, page = 1, options = {}) {
     let filteredIndexedRows = indexedRows;
     if (searchTerm) {
         filteredIndexedRows = indexedRows.filter(({ row }) =>
-            row.some(cell => String(cell || '').toLowerCase().includes(searchTerm))
+            displayHeaderIndices.some(cIdx => String(row[cIdx] || '').toLowerCase().includes(searchTerm))
         );
     }
 
     tableHead.innerHTML = `
         <tr>
-            ${displayHeaderIndices.map(idx => `<th>${headers[idx]}</th>`).join('')}
+            ${displayHeaderIndices.map(idx => `<th>${escapeHtml(headers[idx])}</th>`).join('')}
         </tr>
     `;
 
@@ -165,29 +201,30 @@ export function renderPreviewTable(headers, rows, page = 1, options = {}) {
         tableBody.innerHTML = pageIndexedRows.map(({ row, globalIdx }, rIdx) => `
             <tr class="${rIdx % 2 === 0 ? 'even-row' : 'odd-row'}">
                 ${displayHeaderIndices.map(cIdx => {
-                    const val = row[cIdx] !== undefined && row[cIdx] !== null ? row[cIdx] : '';
+                    const rawVal = row[cIdx] !== undefined && row[cIdx] !== null ? row[cIdx] : '';
+                    const val = displayValue(headers[cIdx], rawVal);
                     const isEditableCol = isEditMode && (cIdx === instColIdx || cIdx === urColIdx || cIdx === puestoColIdx);
 
                     if (isEditableCol) {
-                        const escapedVal = String(val).replace(/"/g, '&quot;');
                         return `<td class="editable-td">
                             <input type="text"
                                    class="table-edit-input"
                                    data-global-idx="${globalIdx}"
                                    data-col-idx="${cIdx}"
-                                   value="${escapedVal}"
+                                   value="${escapeHtml(val)}"
                                    placeholder="Ingresa valor..." />
                         </td>`;
                     }
 
-                    const isDate = headers[cIdx].includes('Fecha Real');
-                    const isSuggested = headers[cIdx].includes('Fecha Sugerida');
-                    const isTotal = headers[cIdx] === 'Sueldo + Compensación';
+                    const normalized = normHeaders[cIdx];
+                    const isDate = normalized.includes('fechareal');
+                    const isSuggested = normalized.includes('fechasugerida');
+                    const isTotal = normalizeHeader(headers[cIdx]) === normalizeHeader('Sueldo + Compensación');
                     let cellClass = '';
                     if (isDate && val) cellClass = 'date-badge';
                     if (isSuggested && val) cellClass = 'suggested-date-badge';
                     if (isTotal) cellClass = 'total-badge';
-                    return `<td class="${cellClass}">${val}</td>`;
+                    return `<td class="${cellClass}">${escapeHtml(val)}</td>`;
                 }).join('')}
             </tr>
         `).join('');
