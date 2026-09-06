@@ -4,6 +4,10 @@ import {
     formatInstitutionalSalary,
     toExcelTsv
 } from './modules/institutionalOutput.js';
+import {
+    combineInstitutionalOutputs,
+    getCurrentImssInstitutionalOutput
+} from './modules/imssIntegration.js';
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -19,12 +23,16 @@ function isEditModeActive() {
     return banner && !banner.classList.contains('hidden');
 }
 
-function getOutput() {
+function getRuspOutput() {
     const current = getCurrentTableData();
-    if (!current.headers.length || !current.rows.length) {
-        return { headers: [], rows: [] };
-    }
+    if (!current.headers.length || !current.rows.length) return null;
     return buildInstitutionalOutput(current.headers, current.rows);
+}
+
+function getOutput() {
+    const ruspOutput = getRuspOutput();
+    const imssOutput = getCurrentImssInstitutionalOutput();
+    return combineInstitutionalOutputs([ruspOutput, imssOutput]);
 }
 
 function getInstitutionalCellClass(columnIndex, value) {
@@ -33,6 +41,15 @@ function getInstitutionalCellClass(columnIndex, value) {
     if (columnIndex === 4 && value) return 'institutional-end-date';
     if (columnIndex === 7 && value) return 'institutional-observation';
     return '';
+}
+
+function buildSourceSummary(rows) {
+    const ruspCount = rows.filter(row => String(row[6] || '').toUpperCase().includes('RUSP')).length;
+    const imssCount = rows.filter(row => String(row[6] || '').toUpperCase().includes('IMSS')).length;
+    const parts = [];
+    if (ruspCount) parts.push(`RUSP ${ruspCount}`);
+    if (imssCount) parts.push(`IMSS ${imssCount}`);
+    return parts.length ? ` Fuentes: ${parts.join(' · ')}.` : '';
 }
 
 function renderInstitutionalOutput() {
@@ -66,13 +83,15 @@ function renderInstitutionalOutput() {
     `).join('');
 
     if (summary) {
-        const inactivityCount = output.rows.filter(row => String(row[7] || '').trim() !== '').length;
+        const inactivityCount = output.rows.filter(row => /inactividad laboral/i.test(String(row[7] || ''))).length;
         const baseSummary = output.rows.length > previewRows.length
             ? `Vista previa de ${previewRows.length} de ${output.rows.length} registros. El copiado incluye todos.`
             : `${output.rows.length} registro${output.rows.length === 1 ? '' : 's'} listo${output.rows.length === 1 ? '' : 's'} para Excel.`;
-        summary.textContent = inactivityCount
-            ? `${baseSummary} ${inactivityCount} periodo${inactivityCount === 1 ? '' : 's'} de inactividad detectado${inactivityCount === 1 ? '' : 's'}.`
-            : baseSummary;
+        const sourceSummary = buildSourceSummary(output.rows);
+        const inactivitySummary = inactivityCount
+            ? ` ${inactivityCount} periodo${inactivityCount === 1 ? '' : 's'} de inactividad detectado${inactivityCount === 1 ? '' : 's'}.`
+            : '';
+        summary.textContent = `${baseSummary}${sourceSummary}${inactivitySummary}`;
     }
 }
 
@@ -156,5 +175,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    document.addEventListener('institutional-source-updated', renderInstitutionalOutput);
     renderInstitutionalOutput();
 });
