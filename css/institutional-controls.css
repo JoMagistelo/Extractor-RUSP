@@ -1,0 +1,19 @@
+.btn-check-update {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #FFFFFF !important;
+    border: 1px solid rgba(255, 255, 255, 0.38) !important;
+    border-radius: 7px !important;
+    box-shadow: none !important;
+}
+
+.btn-check-update:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.16) !important;
+    color: #FFFFFF !important;
+    border-color: #F4EEE5 !important;
+    box-shadow: none !important;
+}
+
+.btn-check-update:focus-visible {
+    outline: 3px solid rgba(176, 141, 87, 0.45);
+    outline-offset: 2px;
+}
