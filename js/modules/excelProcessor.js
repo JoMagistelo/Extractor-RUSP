@@ -332,13 +332,13 @@ export function processExcelData(arrayBuffer) {
 
             rowUpper[idxTerminoCol] = dateTermino;
             rowUpper[idxInicioCol] = '';
-            rowUpper[idxSugTerminoCol] = calculateSuggestedDate(dateTermino);
+            rowUpper[idxSugTerminoCol] = calculateSuggestedDate(dateTermino, 'termino');
             rowUpper[idxSugInicioCol] = '';
 
             rowLower[idxTerminoCol] = '';
             rowLower[idxInicioCol] = dateInicio;
             rowLower[idxSugTerminoCol] = '';
-            rowLower[idxSugInicioCol] = calculateSuggestedDate(dateInicio);
+            rowLower[idxSugInicioCol] = calculateSuggestedDate(dateInicio, 'inicio');
 
             finalRows.push(rowUpper, rowLower);
 
@@ -349,8 +349,8 @@ export function processExcelData(arrayBuffer) {
             while (simplified.length < finalHeaders.length) simplified.push('');
             simplified[idxTerminoCol] = dateTermino;
             simplified[idxInicioCol] = dateInicio;
-            simplified[idxSugTerminoCol] = calculateSuggestedDate(dateTermino);
-            simplified[idxSugInicioCol] = calculateSuggestedDate(dateInicio);
+            simplified[idxSugTerminoCol] = calculateSuggestedDate(dateTermino, 'termino');
+            simplified[idxSugInicioCol] = calculateSuggestedDate(dateInicio, 'inicio');
             simplificadoRows.push(simplified);
             return;
         }
@@ -366,7 +366,7 @@ export function processExcelData(arrayBuffer) {
         single[idxTerminoCol] = '';
         single[idxInicioCol] = dateInicio;
         single[idxSugTerminoCol] = '';
-        single[idxSugInicioCol] = calculateSuggestedDate(dateInicio);
+        single[idxSugInicioCol] = calculateSuggestedDate(dateInicio, 'inicio');
         finalRows.push(single);
         simplificadoRows.push([...single]);
     });
@@ -513,8 +513,8 @@ export function homologateSimplifiedData(headers, rows, options = {}) {
 
         if (idxRealInicio !== -1 && minInicioStr) representative[idxRealInicio] = minInicioStr;
         if (idxRealTermino !== -1 && maxTerminoStr) representative[idxRealTermino] = maxTerminoStr;
-        if (idxSugInicio !== -1 && minInicioStr) representative[idxSugInicio] = calculateSuggestedDate(minInicioStr);
-        if (idxSugTermino !== -1 && maxTerminoStr) representative[idxSugTermino] = calculateSuggestedDate(maxTerminoStr);
+        if (idxSugInicio !== -1 && minInicioStr) representative[idxSugInicio] = calculateSuggestedDate(minInicioStr, 'inicio');
+        if (idxSugTermino !== -1 && maxTerminoStr) representative[idxSugTermino] = calculateSuggestedDate(maxTerminoStr, 'termino');
 
         return representative;
     });
