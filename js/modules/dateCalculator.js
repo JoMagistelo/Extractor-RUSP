@@ -4,12 +4,12 @@
  */
 
 /**
- * Formatea un objeto Date a cadena DD/MM/YYYY
- * @param {Date} dateObj 
- * @returns {string} Fecha formateada
+ * Formatea un objeto Date a cadena DD/MM/YYYY.
+ * @param {Date} dateObj
+ * @returns {string}
  */
 export function formatDate(dateObj) {
-    if (!dateObj || isNaN(dateObj.getTime())) return '';
+    if (!dateObj || Number.isNaN(dateObj.getTime())) return '';
     const day = String(dateObj.getDate()).padStart(2, '0');
     const month = String(dateObj.getMonth() + 1).padStart(2, '0');
     const year = dateObj.getFullYear();
@@ -17,90 +17,109 @@ export function formatDate(dateObj) {
 }
 
 /**
- * Calcula la fecha real de término o inicio según las reglas institucionales.
- * 
- * REGLAS:
- * FECHA TERMINO:
- * - Quincena 1 (días 1 al 15): Base = día 15 del mes/año. Restar 15 días.
- * - Quincena 2 (días 16 al fin de mes): Base = último día del mes/año. Restar 15 días.
- * 
- * FECHA INICIO:
- * - Quincena 1: Base = día 01 del mes/año. Restar 15 días.
- * - Quincena 2: Base = día 16 del mes/año. Restar 15 días.
- * 
- * @param {number|string} year - Año (ej. 2013)
- * @param {number|string} month - Mes (1-12)
- * @param {number|string} quincena - Quincena (1 o 2)
- * @param {'termino'|'inicio'} type - Tipo de cálculo
- * @returns {string} Fecha calculada en formato DD/MM/YYYY o cadena vacía si los datos no son válidos.
+ * Calcula la fecha real de término o inicio según las reglas existentes del RUSP.
+ *
+ * @param {number|string} year
+ * @param {number|string} month
+ * @param {number|string} quincena
+ * @param {'termino'|'inicio'} type
+ * @returns {string}
  */
 export function calculateDate(year, month, quincena, type) {
     const y = parseInt(year, 10);
     const m = parseInt(month, 10);
     const q = parseInt(quincena, 10);
 
-    if (isNaN(y) || isNaN(m) || isNaN(q) || m < 1 || m > 12 || (q !== 1 && q !== 2)) {
+    if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(q) || m < 1 || m > 12 || (q !== 1 && q !== 2)) {
         return '';
     }
 
     let baseDate;
 
     if (type === 'termino') {
-        if (q === 1) {
-            // Día 15 del mes (mes en JS es 0-indexed: m - 1)
-            baseDate = new Date(y, m - 1, 15);
-        } else {
-            // Último día del mes actual: new Date(y, m, 0) da el último día del mes m
-            baseDate = new Date(y, m, 0);
-        }
+        baseDate = q === 1
+            ? new Date(y, m - 1, 15)
+            : new Date(y, m, 0);
     } else if (type === 'inicio') {
-        if (q === 1) {
-            // Día 1 del mes
-            baseDate = new Date(y, m - 1, 1);
-        } else {
-            // Día 16 del mes
-            baseDate = new Date(y, m - 1, 16);
-        }
+        baseDate = q === 1
+            ? new Date(y, m - 1, 1)
+            : new Date(y, m - 1, 16);
     } else {
         return '';
     }
 
-    // Restar 15 días a la fecha base
     baseDate.setDate(baseDate.getDate() - 15);
-
     return formatDate(baseDate);
 }
 
-/**
- * Calcula la fecha sugerida (quincenal o fin de mes) a partir de una fecha DD/MM/YYYY.
- * - Día 1 al 5: día 01 del mismo mes/año.
- * - Día 6 al 20: día 16 del mismo mes/año.
- * - Día >= 21: último día del mes (31, 30, 28 o 29 según el mes/año).
- * 
- * @param {string} dateStr - Fecha en formato DD/MM/YYYY
- * @returns {string} Fecha sugerida en formato DD/MM/YYYY
- */
-export function calculateSuggestedDate(dateStr) {
-    if (!dateStr || typeof dateStr !== 'string') return '';
-    const parts = dateStr.trim().split('/');
-    if (parts.length !== 3) return '';
+function parseDate(dateStr) {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+    const match = dateStr.trim().match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+    if (!match) return null;
 
-    const d = parseInt(parts[0], 10);
-    const m = parseInt(parts[1], 10);
-    const y = parseInt(parts[2], 10);
+    const day = Number(match[1]);
+    const month = Number(match[2]);
+    const year = Number(match[3]);
+    const date = new Date(year, month - 1, day);
 
-    if (isNaN(d) || isNaN(m) || isNaN(y) || m < 1 || m > 12) return '';
-
-    let suggestedDay = 1;
-    if (d >= 1 && d <= 5) {
-        suggestedDay = 1;
-    } else if (d >= 6 && d <= 20) {
-        suggestedDay = 16;
-    } else if (d >= 21) {
-        suggestedDay = new Date(y, m, 0).getDate();
+    if (
+        Number.isNaN(date.getTime()) ||
+        date.getDate() !== day ||
+        date.getMonth() !== month - 1 ||
+        date.getFullYear() !== year
+    ) {
+        return null;
     }
 
-    const sDayStr = String(suggestedDay).padStart(2, '0');
-    const sMonthStr = String(m).padStart(2, '0');
-    return `${sDayStr}/${sMonthStr}/${y}`;
+    return date;
+}
+
+/**
+ * Calcula la fecha sugerida a partir de una fecha real.
+ *
+ * Reglas institucionales nuevas:
+ * - inicio: siempre se normaliza al día 16; si la fecha real ya rebasó el 16,
+ *   se utiliza el día 16 del mes siguiente;
+ * - término: siempre se normaliza al día 15; si la fecha real ya rebasó el 15,
+ *   se utiliza el día 15 del mes siguiente.
+ *
+ * Si no se indica type, se conserva el redondeo histórico para compatibilidad
+ * con cualquier consumidor externo del módulo.
+ *
+ * @param {string} dateStr
+ * @param {'termino'|'inicio'} [type]
+ * @returns {string}
+ */
+export function calculateSuggestedDate(dateStr, type) {
+    const date = parseDate(dateStr);
+    if (!date) return '';
+
+    const day = date.getDate();
+    const month = date.getMonth();
+    const year = date.getFullYear();
+
+    if (type === 'inicio') {
+        const suggested = day <= 16
+            ? new Date(year, month, 16)
+            : new Date(year, month + 1, 16);
+        return formatDate(suggested);
+    }
+
+    if (type === 'termino') {
+        const suggested = day <= 15
+            ? new Date(year, month, 15)
+            : new Date(year, month + 1, 15);
+        return formatDate(suggested);
+    }
+
+    let suggestedDay = 1;
+    if (day >= 1 && day <= 5) {
+        suggestedDay = 1;
+    } else if (day >= 6 && day <= 20) {
+        suggestedDay = 16;
+    } else if (day >= 21) {
+        suggestedDay = new Date(year, month + 1, 0).getDate();
+    }
+
+    return formatDate(new Date(year, month, suggestedDay));
 }
