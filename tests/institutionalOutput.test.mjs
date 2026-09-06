@@ -43,7 +43,7 @@ test('cierra una baja el 15 y abre la siguiente alta el 16', () => {
     assert.equal(output.rows[1][4], 'A la fecha');
 });
 
-test('no mezcla periodos de personas diferentes', () => {
+test('no mezcla ni elimina periodos idénticos de personas diferentes', () => {
     const headers = [
         'rfc',
         'institucion',
@@ -55,11 +55,12 @@ test('no mezcla periodos de personas diferentes', () => {
 
     const rows = [
         ['AAA010101AAA', 'Institución A', 'Analista', 20000, '01/01/2024', ''],
-        ['BBB010101BBB', 'Institución A', 'Analista', 21000, '01/02/2024', '']
+        ['BBB010101BBB', 'Institución A', 'Analista', 20000, '01/01/2024', '']
     ];
 
     const output = buildInstitutionalOutput(headers, rows);
     assert.equal(output.rows.length, 2);
+    assert.deepEqual(output.rows[0], output.rows[1]);
     assert.equal(output.rows[0][4], 'A la fecha');
     assert.equal(output.rows[1][4], 'A la fecha');
 });
