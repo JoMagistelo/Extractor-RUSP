@@ -2,15 +2,16 @@
 
 ## Alcance
 
-RUSP Extractor Institucional procesa hojas de cálculo que pueden contener datos personales, identificadores, historial laboral y remuneraciones. El código del repositorio es solo una parte del control de seguridad y no sustituye los controles institucionales de identidad, equipos, redes, almacenamiento, monitoreo, respaldo, continuidad ni respuesta a incidentes.
+RUSP Extractor Institucional procesa hojas de cálculo RUSP y Constancias de Semanas Cotizadas IMSS que pueden contener datos personales, identificadores, historial laboral, remuneraciones y bases de cotización. El código del repositorio es solo una parte del control de seguridad y no sustituye los controles institucionales de identidad, equipos, redes, almacenamiento, monitoreo, respaldo, continuidad ni respuesta a incidentes.
 
 ## Datos que no deben versionarse
 
 No deben incorporarse al repositorio, issues, revisiones, commits o artefactos públicos:
 
 - archivos RUSP reales;
-- RFC, CURP, nombres, números de empleado u otros identificadores asociados a personas reales;
-- historiales laborales o remuneraciones identificables;
+- Constancias de Semanas Cotizadas IMSS reales;
+- RFC, CURP, NSS, nombres, números de empleado u otros identificadores asociados a personas reales;
+- historiales laborales, registros patronales, remuneraciones o SBC identificables;
 - credenciales, tokens, certificados, llaves privadas o secretos;
 - configuraciones productivas, rutas internas o direcciones de infraestructura;
 - capturas o logs que revelen datos personales.
@@ -19,7 +20,9 @@ Las pruebas con datos reales deben realizarse únicamente en entornos y equipos 
 
 ## Tratamiento local
 
-La lógica de lectura, depuración, homologación, salida institucional y copiado a Excel trabaja sobre los datos cargados en la aplicación. Ninguna mejora funcional debe introducir transmisión de datos a servicios externos sin revisión técnica, jurídica y de seguridad previa.
+La lógica de lectura, depuración, homologación, extracción IMSS, salida institucional y copiado a Excel trabaja sobre los datos cargados en la aplicación. Ninguna mejora funcional debe introducir transmisión de datos a servicios externos sin revisión técnica, jurídica y de seguridad previa.
+
+La aplicación actual carga SheetJS y PDF.js desde CDN por compatibilidad con la implementación heredada. Esto no implica el envío de los archivos RUSP o IMSS a esos servicios, pero antes de una liberación institucional completamente autocontenida se recomienda vendorizarlas y validar sus versiones y procedencia.
 
 ## Dependencias
 
