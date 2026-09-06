@@ -27,6 +27,14 @@ function getOutput() {
     return buildInstitutionalOutput(current.headers, current.rows);
 }
 
+function getInstitutionalCellClass(columnIndex, value) {
+    if (columnIndex === 3 && value) return 'institutional-start-date';
+    if (columnIndex === 4 && value === 'A la fecha') return 'institutional-current-date';
+    if (columnIndex === 4 && value) return 'institutional-end-date';
+    if (columnIndex === 7 && value) return 'institutional-observation';
+    return '';
+}
+
 function renderInstitutionalOutput() {
     const card = document.getElementById('institutional-output-card');
     const tableHead = document.querySelector('#institutional-table thead');
@@ -51,15 +59,20 @@ function renderInstitutionalOutput() {
                 const rendered = columnIndex === 5
                     ? formatInstitutionalSalary(value)
                     : value;
-                return `<td>${escapeHtml(rendered)}</td>`;
+                const cellClass = getInstitutionalCellClass(columnIndex, value);
+                return `<td class="${cellClass}">${escapeHtml(rendered)}</td>`;
             }).join('')}
         </tr>
     `).join('');
 
     if (summary) {
-        summary.textContent = output.rows.length > previewRows.length
+        const inactivityCount = output.rows.filter(row => String(row[7] || '').trim() !== '').length;
+        const baseSummary = output.rows.length > previewRows.length
             ? `Vista previa de ${previewRows.length} de ${output.rows.length} registros. El copiado incluye todos.`
             : `${output.rows.length} registro${output.rows.length === 1 ? '' : 's'} listo${output.rows.length === 1 ? '' : 's'} para Excel.`;
+        summary.textContent = inactivityCount
+            ? `${baseSummary} ${inactivityCount} periodo${inactivityCount === 1 ? '' : 's'} de inactividad detectado${inactivityCount === 1 ? '' : 's'}.`
+            : baseSummary;
     }
 }
 
