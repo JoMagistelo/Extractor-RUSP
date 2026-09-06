@@ -1,6 +1,6 @@
 /**
- * Extractor Excel Institucional - Controlador Principal (App)
- * Arquitectura Modular JavaScript ES Modules.
+ * RUSP Extractor Institucional - Controlador principal.
+ * Admite una fuente RUSP (Excel), una Constancia de Semanas Cotizadas IMSS (PDF) o ambas.
  */
 
 import {
@@ -17,18 +17,52 @@ import {
     showAlert,
     clearAlert
 } from './modules/uiManager.js';
+import {
+    processImssPdf,
+    setCurrentImssResult
+} from './modules/imssIntegration.js';
+import { smartInstitutionalCase } from './modules/textFormat.js';
 
 let processedData = null;
+let imssData = null;
 let activeDataset = 'original'; // 'original' | 'edited'
 let isEditMode = false;
 let draftHeaders = null;
 let draftRows = null;
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function formatMoney(value) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return value ?? '';
+    return new Intl.NumberFormat('es-MX', {
+        style: 'currency',
+        currency: 'MXN',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(value);
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('file-input');
     const dropZone = document.getElementById('drop-zone');
     const btnSelectFile = document.getElementById('btn-select-file');
     const resultsSection = document.getElementById('results-section');
+    const ruspStatsCard = document.getElementById('rusp-stats-card');
+    const ruspWorkCard = document.getElementById('rusp-work-card');
+    const ruspActionBar = document.getElementById('rusp-action-bar');
+    const imssHistoryCard = document.getElementById('imss-history-card');
+    const imssHistoryBody = document.querySelector('#imss-history-table tbody');
+    const imssSummary = document.getElementById('imss-summary');
+    const ruspSourceStatus = document.getElementById('source-rusp-status');
+    const imssSourceStatus = document.getElementById('source-imss-status');
+
     const searchInput = document.getElementById('table-search');
     const chkShowUR = document.getElementById('chk-show-ur');
     const chkHomologateUR = document.getElementById('chk-homologate-ur');
@@ -45,6 +79,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const versionLabel = document.getElementById('version-label');
     const appVersionBadge = document.getElementById('app-version-badge');
 
+    if (globalThis.pdfjsLib?.GlobalWorkerOptions) {
+        globalThis.pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    }
+
     // La versión se muestra de forma discreta; no hay controles de actualización en la interfaz.
     if (window.require) {
         try {
@@ -57,25 +96,83 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {}
     }
 
-    /**
-     * Obtiene la lista de columnas activas considerando la opción "Ver UR".
-     * RFC, año, mes y quincena se conservan internamente y para exportación,
-     * pero UIManager los oculta en la tabla principal.
-     */
+    function setSourceStatus(element, fileName) {
+        if (!element) return;
+        const value = element.querySelector('strong');
+        if (fileName) {
+            element.classList.add('loaded');
+            if (value) value.textContent = fileName;
+        } else {
+            element.classList.remove('loaded');
+            if (value) value.textContent = 'No cargado';
+        }
+    }
+
     function getActiveColumns() {
         return getSimplifiedColumns(chkShowUR && chkShowUR.checked);
     }
 
-    if (chkShowUR) {
-        chkShowUR.addEventListener('change', () => {
+    function renderImssHistory() {
+        if (!imssData || !imssHistoryBody) return;
+
+        imssHistoryBody.innerHTML = imssData.history.map(item => {
+            const employer = smartInstitutionalCase(item.employer || '');
+            const entity = smartInstitutionalCase(item.entity || '');
+            const endClass = item.endDate === 'A la fecha' ? 'imss-current-date' : 'imss-end-date';
+            return `
+                <tr>
+                    <td>${escapeHtml(employer)}</td>
+                    <td>${escapeHtml(item.registration)}</td>
+                    <td>${escapeHtml(entity)}</td>
+                    <td class="imss-start-date">${escapeHtml(item.startDate)}</td>
+                    <td class="${endClass}">${escapeHtml(item.endDate)}</td>
+                    <td>${escapeHtml(formatMoney(item.contributionBaseSalary))}</td>
+                </tr>
+            `;
+        }).join('');
+
+        if (imssSummary) {
+            const count = imssData.history.length;
+            const weeks = Number.isFinite(imssData.personal?.totalWeeks)
+                ? ` · ${imssData.personal.totalWeeks.toLocaleString('es-MX')} semanas cotizadas reportadas`
+                : '';
+            imssSummary.textContent = `${count} periodo${count === 1 ? '' : 's'} laboral${count === 1 ? '' : 'es'} IMSS${weeks}.`;
+        }
+    }
+
+    function refreshResults({ scroll = false } = {}) {
+        const hasRusp = !!processedData;
+        const hasImss = !!imssData;
+        const hasAny = hasRusp || hasImss;
+
+        if (resultsSection) resultsSection.classList.toggle('hidden', !hasAny);
+        if (ruspStatsCard) ruspStatsCard.classList.toggle('hidden', !hasRusp);
+        if (ruspWorkCard) ruspWorkCard.classList.toggle('hidden', !hasRusp);
+        if (ruspActionBar) ruspActionBar.classList.toggle('hidden', !hasRusp);
+        if (imssHistoryCard) imssHistoryCard.classList.toggle('hidden', !hasImss);
+
+        if (hasRusp) {
+            updateUIState();
+            renderStats(processedData.stats);
             updateTableDisplay();
-        });
+        }
+
+        if (hasImss) renderImssHistory();
+
+        document.dispatchEvent(new CustomEvent('institutional-source-updated'));
+
+        if (hasAny && scroll && resultsSection) {
+            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    if (chkShowUR) {
+        chkShowUR.checked = false;
+        chkShowUR.addEventListener('change', updateTableDisplay);
     }
 
     if (chkHomologateUR) {
-        chkHomologateUR.addEventListener('change', () => {
-            updateTableDisplay();
-        });
+        chkHomologateUR.addEventListener('change', updateTableDisplay);
     }
 
     if (dropZone) {
@@ -96,11 +193,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         dropZone.addEventListener('drop', (e) => {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            if (files && files.length > 0) {
-                handleFile(files[0]);
-            }
+            const files = e.dataTransfer?.files;
+            if (files?.length) handleFiles(files);
         });
     }
 
@@ -110,16 +204,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (fileInput) {
         fileInput.addEventListener('change', (e) => {
-            if (e.target.files && e.target.files.length > 0) {
-                handleFile(e.target.files[0]);
-            }
+            if (e.target.files?.length) handleFiles(e.target.files);
+            e.target.value = '';
         });
     }
 
     if (searchInput) {
-        searchInput.addEventListener('input', () => {
-            updateTableDisplay();
-        });
+        searchInput.addEventListener('input', updateTableDisplay);
     }
 
     if (btnEditSimplificado) {
@@ -167,7 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btnEditSimplificado) btnEditSimplificado.classList.remove('hidden');
             if (btnDownloadSimplificado) btnDownloadSimplificado.classList.remove('hidden');
 
-            if (processedData && processedData.editedSimplificado && btnToggleVersion) {
+            if (processedData?.editedSimplificado && btnToggleVersion) {
                 btnToggleVersion.classList.remove('hidden');
             }
 
@@ -188,7 +279,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     headers: draftHeaders,
                     rows: homologatedRows
                 };
-
                 processedData.stats.editedCount = homologatedRows.length;
 
                 isEditMode = false;
@@ -199,7 +289,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (btnSaveEdit) btnSaveEdit.classList.add('hidden');
                 if (btnCancelEdit) btnCancelEdit.classList.add('hidden');
                 if (wrapperHomologateUR) wrapperHomologateUR.classList.add('hidden');
-
                 if (btnEditSimplificado) btnEditSimplificado.classList.remove('hidden');
                 if (btnDownloadSimplificado) btnDownloadSimplificado.classList.remove('hidden');
                 if (btnToggleVersion) {
@@ -210,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateUIState();
                 renderStats(processedData.stats);
                 updateTableDisplay();
-
+                document.dispatchEvent(new CustomEvent('institutional-source-updated'));
                 showAlert(`RUSP Simplificado editado y homologado con éxito. Se consolidaron ${homologatedRows.length} registros.`, 'success');
             } catch (err) {
                 console.error(err);
@@ -221,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnToggleVersion) {
         btnToggleVersion.addEventListener('click', () => {
-            if (!processedData || !processedData.editedSimplificado) return;
+            if (!processedData?.editedSimplificado) return;
 
             if (activeDataset === 'original') {
                 activeDataset = 'edited';
@@ -233,13 +322,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             updateUIState();
             updateTableDisplay();
+            document.dispatchEvent(new CustomEvent('institutional-source-updated'));
         });
     }
 
     if (btnDownloadSimplificado) {
         btnDownloadSimplificado.addEventListener('click', () => {
             if (!processedData) return;
-
             const targetCols = getActiveColumns();
 
             if (activeDataset === 'edited' && processedData.editedSimplificado) {
@@ -260,45 +349,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function handleFile(file) {
-        clearAlert();
+    async function processRuspFile(file) {
+        const arrayBuffer = await file.arrayBuffer();
+        const parsed = processExcelData(arrayBuffer);
 
-        const fileName = file.name.toLowerCase();
-        if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
-            showAlert('Por favor, selecciona un archivo de hoja de cálculo válido (.xlsx o .xls).', 'error');
-            return;
-        }
-
-        toggleLoading(true);
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const arrayBuffer = e.target.result;
-                processArrayBuffer(arrayBuffer, file.name);
-            } catch (err) {
-                console.error(err);
-                showAlert('Ocurrió un error al procesar el archivo Excel: ' + err.message, 'error');
-                if (resultsSection) resultsSection.classList.add('hidden');
-            } finally {
-                toggleLoading(false);
-            }
-        };
-
-        reader.onerror = () => {
-            showAlert('No se pudo leer el archivo seleccionado.', 'error');
-            toggleLoading(false);
-        };
-
-        reader.readAsArrayBuffer(file);
-    }
-
-    function processArrayBuffer(arrayBuffer, fileName) {
-        processedData = processExcelData(arrayBuffer);
-
+        processedData = parsed;
         activeDataset = 'original';
         isEditMode = false;
         draftRows = null;
+        draftHeaders = null;
         processedData.editedSimplificado = null;
 
         if (btnToggleVersion) btnToggleVersion.classList.add('hidden');
@@ -309,19 +368,64 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnEditSimplificado) btnEditSimplificado.classList.remove('hidden');
         if (btnDownloadSimplificado) btnDownloadSimplificado.classList.remove('hidden');
 
-        updateUIState();
-        renderStats(processedData.stats);
-        updateTableDisplay();
+        setSourceStatus(ruspSourceStatus, file.name);
+        return `RUSP: ${file.name}`;
+    }
 
-        if (resultsSection) {
-            resultsSection.classList.remove('hidden');
-            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    async function processImssFile(file) {
+        const parsed = await processImssPdf(file);
+        if (!parsed.history.length) {
+            throw new Error('La constancia IMSS fue reconocida, pero no se encontraron periodos de historia laboral.');
         }
 
-        showAlert(`Archivo <strong>${fileName}</strong> procesado exitosamente. Se eliminaron ${processedData.stats.eliminated} filas redundantes.`, 'success');
+        imssData = parsed;
+        setCurrentImssResult(parsed);
+        setSourceStatus(imssSourceStatus, file.name);
+        return `IMSS: ${file.name}`;
+    }
+
+    async function handleFiles(fileList) {
+        clearAlert();
+        const files = Array.from(fileList || []);
+        if (!files.length) return;
+
+        const ruspFiles = files.filter(file => /\.(xlsx|xls)$/i.test(file.name));
+        const imssFiles = files.filter(file => /\.pdf$/i.test(file.name) || file.type === 'application/pdf');
+        const supported = new Set([...ruspFiles, ...imssFiles]);
+        const unsupported = files.filter(file => !supported.has(file));
+
+        if (unsupported.length) {
+            showAlert('Solo se admiten archivos Excel RUSP (.xlsx/.xls) y Constancias IMSS en PDF.', 'error');
+            return;
+        }
+        if (ruspFiles.length > 1 || imssFiles.length > 1) {
+            showAlert('Se admite como máximo un archivo RUSP y una constancia IMSS por carga.', 'error');
+            return;
+        }
+
+        toggleLoading(true);
+        const loaded = [];
+        try {
+            if (ruspFiles[0]) loaded.push(await processRuspFile(ruspFiles[0]));
+            if (imssFiles[0]) loaded.push(await processImssFile(imssFiles[0]));
+
+            refreshResults({ scroll: true });
+            showAlert(
+                `${loaded.map(value => `<strong>${escapeHtml(value)}</strong>`).join(' · ')} procesado${loaded.length === 1 ? '' : 's'} correctamente. La salida institucional ya integra las fuentes disponibles.`,
+                'success'
+            );
+        } catch (err) {
+            console.error(err);
+            refreshResults({ scroll: false });
+            showAlert('No fue posible procesar uno de los archivos: ' + escapeHtml(err.message), 'error');
+        } finally {
+            toggleLoading(false);
+        }
     }
 
     function updateUIState() {
+        if (!processedData) return;
+
         if (activeDataset === 'edited') {
             if (activeVersionBadge) {
                 activeVersionBadge.textContent = 'Ajustado / Homologado';
@@ -372,9 +476,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 processedData.editedSimplificado.rows,
                 targetCols
             );
-            renderPreviewTable(simpData.headers, simpData.rows, 1, {
-                isEditMode: false
-            });
+            renderPreviewTable(simpData.headers, simpData.rows, 1, { isEditMode: false });
             return;
         }
 
@@ -383,8 +485,10 @@ document.addEventListener('DOMContentLoaded', () => {
             processedData.simplificado.rows,
             targetCols
         );
-        renderPreviewTable(simpData.headers, simpData.rows, 1, {
-            isEditMode: false
-        });
+        renderPreviewTable(simpData.headers, simpData.rows, 1, { isEditMode: false });
     }
+
+    setSourceStatus(ruspSourceStatus, null);
+    setSourceStatus(imssSourceStatus, null);
+    refreshResults();
 });
