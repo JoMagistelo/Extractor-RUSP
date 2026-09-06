@@ -1,3 +1,5 @@
+import { smartInstitutionalCase } from './textFormat.js';
+
 export const INSTITUTIONAL_HEADERS = [
     'Sector',
     'Emp-Inst',
@@ -109,6 +111,66 @@ function valueAt(row, index) {
         : '';
 }
 
+function chooseLaterEnd(currentValue, candidateValue) {
+    if (!candidateValue) return currentValue || '';
+    if (!currentValue) return candidateValue;
+
+    const current = parseDate(normalizeEndBoundary(currentValue));
+    const candidate = parseDate(normalizeEndBoundary(candidateValue));
+    if (!candidate) return currentValue;
+    if (!current || candidate.getTime() > current.getTime()) return candidateValue;
+    return currentValue;
+}
+
+function calculateInactivityMonths(previousEnd, currentStart) {
+    const endDate = parseDate(previousEnd);
+    const startDate = parseDate(currentStart);
+    if (!endDate || !startDate || startDate.getTime() <= endDate.getTime()) return 0;
+
+    const nextDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() + 1);
+    if (nextDay.getTime() >= startDate.getTime()) return 0;
+
+    if (endDate.getDate() === 15 && startDate.getDate() === 16) {
+        return Math.max(
+            0,
+            (startDate.getFullYear() - endDate.getFullYear()) * 12 +
+            (startDate.getMonth() - endDate.getMonth())
+        );
+    }
+
+    let months =
+        (startDate.getFullYear() - nextDay.getFullYear()) * 12 +
+        (startDate.getMonth() - nextDay.getMonth());
+    if (startDate.getDate() < nextDay.getDate()) months -= 1;
+    return Math.max(0, months);
+}
+
+function detectSourceDirection(items) {
+    let ascending = 0;
+    let descending = 0;
+    let previous = null;
+
+    [...items]
+        .sort((a, b) => a.sourceIndex - b.sourceIndex)
+        .forEach(item => {
+            if (!Number.isFinite(item.sortTime) || item.sortTime === Number.MAX_SAFE_INTEGER) return;
+            if (previous !== null && item.sortTime !== previous) {
+                if (item.sortTime > previous) ascending += 1;
+                if (item.sortTime < previous) descending += 1;
+            }
+            previous = item.sortTime;
+        });
+
+    // RUSP suele venir del periodo más reciente al más antiguo. En empate
+    // conservamos esa orientación para corregir solo anomalías puntuales.
+    return ascending > descending ? 'asc' : 'desc';
+}
+
+function inactivityObservation(months) {
+    if (months < 1) return '';
+    return `Se detecta un periodo de inactividad laboral de ${months} ${months === 1 ? 'mes' : 'meses'} respecto del empleo anterior.`;
+}
+
 export function buildInstitutionalOutput(headers = [], rows = []) {
     const idx = {
         rfc: findColumn(headers, ['rfc']),
@@ -133,8 +195,8 @@ export function buildInstitutionalOutput(headers = [], rows = []) {
             '__persona_unica__'
         ).trim().toLowerCase();
 
-        const institution = String(valueAt(row, idx.institution) || '').trim();
-        const position = String(valueAt(row, idx.position) || '').trim();
+        const institution = smartInstitutionalCase(valueAt(row, idx.institution));
+        const position = smartInstitutionalCase(valueAt(row, idx.position));
         const rawStart = valueAt(row, idx.suggestedStart) || valueAt(row, idx.realStart);
         const rawEnd = valueAt(row, idx.suggestedEnd) || valueAt(row, idx.realEnd);
         const start = normalizeStartBoundary(rawStart);
@@ -157,24 +219,25 @@ export function buildInstitutionalOutput(headers = [], rows = []) {
         byPerson.get(item.person).push(item);
     });
 
-    const outputBySourceIndex = new Map();
-    let groupCounter = 0;
+    const outputRows = [];
 
     byPerson.forEach(items => {
+        const sourceDirection = detectSourceDirection(items);
         items.sort((a, b) => (a.sortTime - b.sortTime) || (a.sourceIndex - b.sourceIndex));
 
         const consolidated = [];
         items.forEach(item => {
             const last = consolidated[consolidated.length - 1];
             const sameEmployment = last &&
-                last.institution.toLowerCase() === item.institution.toLowerCase() &&
-                last.position.toLowerCase() === item.position.toLowerCase();
+                last.institution.toLocaleLowerCase('es-MX') === item.institution.toLocaleLowerCase('es-MX') &&
+                last.position.toLocaleLowerCase('es-MX') === item.position.toLocaleLowerCase('es-MX');
 
             if (sameEmployment) {
                 const itemStartTs = parseDate(item.start)?.getTime() ?? Infinity;
                 const lastStartTs = parseDate(last.start)?.getTime() ?? Infinity;
                 if (!last.start || (item.start && itemStartTs < lastStartTs)) {
                     last.start = item.start;
+                    last.sortTime = itemStartTs;
                 }
 
                 if (
@@ -184,54 +247,52 @@ export function buildInstitutionalOutput(headers = [], rows = []) {
                     last.salary = item.salary;
                 }
 
-                if (item.rawEnd) last.rawEnd = item.rawEnd;
-                last.sourceIndexes.push(item.sourceIndex);
+                last.rawEnd = chooseLaterEnd(last.rawEnd, item.rawEnd);
             } else {
-                consolidated.push({ ...item, sourceIndexes: [item.sourceIndex] });
+                consolidated.push({ ...item });
             }
         });
 
-        consolidated.forEach((item, index) => {
+        const periods = consolidated.map((item, index) => {
             const next = consolidated[index + 1];
             let end = '';
 
-            if (next && next.start) {
-                end = dayBefore(next.start);
-            } else if (item.rawEnd) {
+            if (item.rawEnd) {
                 end = normalizeEndBoundary(item.rawEnd);
+            } else if (next && next.start) {
+                // Fallback conservador para fuentes sin baja explícita.
+                end = dayBefore(next.start);
             } else {
                 end = 'A la fecha';
             }
 
-            const institutionalRow = [
-                item.institution || item.position ? 'Público' : '',
-                item.institution,
-                item.position,
-                item.start,
+            return {
+                start: item.start,
                 end,
-                item.salary,
-                'RUSP',
-                ''
-            ];
-
-            const groupId = `period-${groupCounter++}`;
-            item.sourceIndexes.forEach(sourceIndex => {
-                outputBySourceIndex.set(sourceIndex, { groupId, row: institutionalRow });
-            });
+                row: [
+                    item.institution || item.position ? 'Público' : '',
+                    item.institution,
+                    item.position,
+                    item.start,
+                    end,
+                    item.salary,
+                    'RUSP',
+                    ''
+                ]
+            };
         });
+
+        periods.forEach((period, index) => {
+            if (index > 0) {
+                const previous = periods[index - 1];
+                const inactiveMonths = calculateInactivityMonths(previous.end, period.start);
+                period.row[7] = inactivityObservation(inactiveMonths);
+            }
+        });
+
+        const orderedPeriods = sourceDirection === 'desc' ? [...periods].reverse() : periods;
+        orderedPeriods.forEach(period => outputRows.push(period.row));
     });
-
-    const seenGroups = new Set();
-    const outputRows = [];
-
-    prepared
-        .sort((a, b) => a.sourceIndex - b.sourceIndex)
-        .forEach(item => {
-            const output = outputBySourceIndex.get(item.sourceIndex);
-            if (!output || seenGroups.has(output.groupId)) return;
-            seenGroups.add(output.groupId);
-            outputRows.push(output.row);
-        });
 
     return {
         headers: INSTITUTIONAL_HEADERS,
