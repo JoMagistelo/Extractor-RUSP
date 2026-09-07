@@ -77,11 +77,13 @@ function parseDate(dateStr) {
 /**
  * Calcula la fecha sugerida a partir de una fecha real.
  *
- * Reglas institucionales nuevas:
- * - inicio: siempre se normaliza al día 16; si la fecha real ya rebasó el 16,
- *   se utiliza el día 16 del mes siguiente;
- * - término: siempre se normaliza al día 15; si la fecha real ya rebasó el 15,
- *   se utiliza el día 15 del mes siguiente.
+ * Reglas institucionales:
+ * - inicio: se elige la frontera de inicio de quincena más cercana del mismo mes
+ *   (día 1 o día 16). Así, por ejemplo, 01 se conserva como 01, mientras que
+ *   fechas como 14 o 17 se normalizan al 16;
+ * - término: se elige la frontera de cierre de quincena más cercana del mismo mes
+ *   (día 15 o último día real del mes). El último día se calcula dinámicamente,
+ *   por lo que respeta meses de 28, 29, 30 o 31 días.
  *
  * Si no se indica type, se conserva el redondeo histórico para compatibilidad
  * con cualquier consumidor externo del módulo.
@@ -99,17 +101,27 @@ export function calculateSuggestedDate(dateStr, type) {
     const year = date.getFullYear();
 
     if (type === 'inicio') {
-        const suggested = day <= 16
-            ? new Date(year, month, 16)
-            : new Date(year, month + 1, 16);
-        return formatDate(suggested);
+        const firstFortnightStart = 1;
+        const secondFortnightStart = 16;
+        const distanceToFirst = Math.abs(day - firstFortnightStart);
+        const distanceToSecond = Math.abs(day - secondFortnightStart);
+        const suggestedDay = distanceToFirst <= distanceToSecond
+            ? firstFortnightStart
+            : secondFortnightStart;
+
+        return formatDate(new Date(year, month, suggestedDay));
     }
 
     if (type === 'termino') {
-        const suggested = day <= 15
-            ? new Date(year, month, 15)
-            : new Date(year, month + 1, 15);
-        return formatDate(suggested);
+        const firstFortnightEnd = 15;
+        const monthEnd = new Date(year, month + 1, 0).getDate();
+        const distanceToFirst = Math.abs(day - firstFortnightEnd);
+        const distanceToMonthEnd = Math.abs(day - monthEnd);
+        const suggestedDay = distanceToMonthEnd <= distanceToFirst
+            ? monthEnd
+            : firstFortnightEnd;
+
+        return formatDate(new Date(year, month, suggestedDay));
     }
 
     let suggestedDay = 1;

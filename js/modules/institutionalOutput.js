@@ -1,3 +1,4 @@
+import { calculateSuggestedDate } from './dateCalculator.js';
 import { smartInstitutionalCase } from './textFormat.js';
 
 export const INSTITUTIONAL_HEADERS = [
@@ -52,31 +53,11 @@ function formatDate(date) {
 }
 
 function normalizeStartBoundary(value) {
-    const date = parseDate(value);
-    if (!date) return '';
-
-    const day = date.getDate();
-    const year = date.getFullYear();
-    const month = date.getMonth();
-
-    if (day <= 16) {
-        return formatDate(new Date(year, month, 16));
-    }
-    return formatDate(new Date(year, month + 1, 16));
+    return calculateSuggestedDate(String(value || ''), 'inicio');
 }
 
 function normalizeEndBoundary(value) {
-    const date = parseDate(value);
-    if (!date) return '';
-
-    const day = date.getDate();
-    const year = date.getFullYear();
-    const month = date.getMonth();
-
-    if (day <= 15) {
-        return formatDate(new Date(year, month, 15));
-    }
-    return formatDate(new Date(year, month + 1, 15));
+    return calculateSuggestedDate(String(value || ''), 'termino');
 }
 
 function dayBefore(value) {
