@@ -77,7 +77,7 @@ test('usa el día anterior al siguiente inicio cuando no existe una baja explíc
     assert.equal(chronological[1][4], 'A la fecha');
 });
 
-test('respeta la baja explícita y detecta inactividad laboral', () => {
+test('respeta la baja anterior y coloca la inactividad en el empleo posterior', () => {
     const headers = [
         'rfc',
         'institucion',
@@ -97,12 +97,62 @@ test('respeta la baja explícita y detecta inactividad laboral', () => {
     const newer = output.rows.find(row => row[2] === 'Jefe de Departamento');
 
     assert.equal(older[4], '15/03/2024');
+    assert.equal(older[7], '');
     assert.equal(newer[3], '16/07/2024');
+    assert.equal(newer[4], 'A la fecha');
     assert.equal(
         newer[7],
-        'Se detecta un periodo de inactividad laboral de 4 meses respecto del empleo anterior.'
+        'Se detectó un periodo de inactividad laboral de 4 meses respecto del empleo anterior.'
     );
     assert.equal(older[1], 'Secretaría de la Función Pública');
+});
+
+test('describe periodos largos con años y meses y marca vigente el empleo más reciente', () => {
+    const headers = [
+        'rfc',
+        'institucion',
+        'nombre_puesto',
+        'Sueldo + Compensación',
+        'Fecha Sugerida Inicio',
+        'Fecha Sugerida Termino'
+    ];
+
+    const rows = [
+        ['AAA', 'INSTITUCIÓN ANTERIOR', 'PUESTO ANTERIOR', 20000, '01/01/2017', '31/12/2018'],
+        ['AAA', 'INSTITUCIÓN ACTUAL', 'PUESTO ACTUAL', 30000, '16/04/2020', '31/12/2021']
+    ];
+
+    const output = buildInstitutionalOutput(headers, rows);
+    const older = output.rows.find(row => row[2] === 'Puesto Anterior');
+    const newer = output.rows.find(row => row[2] === 'Puesto Actual');
+
+    assert.equal(older[7], '');
+    assert.equal(newer[4], 'A la fecha');
+    assert.equal(
+        newer[7],
+        'Se detectó un periodo de inactividad laboral mayor a un año y 3 meses respecto del empleo anterior.'
+    );
+});
+
+test('no agrega observación cuando la inactividad no supera un mes', () => {
+    const headers = [
+        'rfc',
+        'institucion',
+        'nombre_puesto',
+        'Sueldo + Compensación',
+        'Fecha Sugerida Inicio',
+        'Fecha Sugerida Termino'
+    ];
+
+    const rows = [
+        ['AAA', 'INSTITUCIÓN A', 'PUESTO UNO', 20000, '01/01/2024', '15/03/2024'],
+        ['AAA', 'INSTITUCIÓN B', 'PUESTO DOS', 25000, '01/04/2024', '15/06/2024']
+    ];
+
+    const output = buildInstitutionalOutput(headers, rows);
+    const newer = output.rows.find(row => row[2] === 'Puesto Dos');
+    assert.equal(newer[7], '');
+    assert.equal(newer[4], 'A la fecha');
 });
 
 test('corrige una anomalía de orden conservando la orientación dominante del RUSP', () => {
@@ -123,6 +173,7 @@ test('corrige una anomalía de orden conservando la orientación dominante del R
 
     const output = buildInstitutionalOutput(headers, rows);
     assert.equal(output.rows[0][2], 'Puesto Tres');
+    assert.equal(output.rows[0][4], 'A la fecha');
     assert.equal(output.rows[1][2], 'Puesto Dos');
     assert.equal(output.rows[2][2], 'Puesto Uno');
 });
