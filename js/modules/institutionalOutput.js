@@ -284,6 +284,7 @@ export function buildInstitutionalOutput(headers = [], rows = []) {
 function sanitizeClipboardCell(value) {
     if (value === null || value === undefined) return '';
     const text = String(value).replace(/[\t\r\n]+/g, ' ').trim();
+
     if (
         /^[=+@]/.test(text) ||
         (/^-/.test(text) && !/^-?\d+(\.\d+)?$/.test(text))
