@@ -103,27 +103,56 @@ function chooseLaterEnd(currentValue, candidateValue) {
     return currentValue;
 }
 
-function calculateInactivityMonths(previousEnd, currentStart) {
+function calendarDayDiff(startDate, endDate) {
+    const startUtc = Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    const endUtc = Date.UTC(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    return Math.max(0, Math.floor((endUtc - startUtc) / 86400000));
+}
+
+function calculateInactivityDuration(previousEnd, currentStart) {
     const endDate = parseDate(previousEnd);
     const startDate = parseDate(currentStart);
-    if (!endDate || !startDate || startDate.getTime() <= endDate.getTime()) return 0;
+    if (!endDate || !startDate || startDate.getTime() <= endDate.getTime()) return null;
 
-    const nextDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() + 1);
-    if (nextDay.getTime() >= startDate.getTime()) return 0;
+    // La inactividad comienza al día siguiente de la baja anterior y termina
+    // justo antes de la fecha de inicio del empleo posterior.
+    const inactivityStart = new Date(
+        endDate.getFullYear(),
+        endDate.getMonth(),
+        endDate.getDate() + 1
+    );
+    if (inactivityStart.getTime() >= startDate.getTime()) return null;
 
-    if (endDate.getDate() === 15 && startDate.getDate() === 16) {
-        return Math.max(
-            0,
-            (startDate.getFullYear() - endDate.getFullYear()) * 12 +
-            (startDate.getMonth() - endDate.getMonth())
+    let totalMonths =
+        (startDate.getFullYear() - inactivityStart.getFullYear()) * 12 +
+        (startDate.getMonth() - inactivityStart.getMonth());
+
+    let anchor = new Date(
+        inactivityStart.getFullYear(),
+        inactivityStart.getMonth() + totalMonths,
+        inactivityStart.getDate()
+    );
+
+    if (anchor.getTime() > startDate.getTime()) {
+        totalMonths -= 1;
+        anchor = new Date(
+            inactivityStart.getFullYear(),
+            inactivityStart.getMonth() + totalMonths,
+            inactivityStart.getDate()
         );
     }
 
-    let months =
-        (startDate.getFullYear() - nextDay.getFullYear()) * 12 +
-        (startDate.getMonth() - nextDay.getMonth());
-    if (startDate.getDate() < nextDay.getDate()) months -= 1;
-    return Math.max(0, months);
+    totalMonths = Math.max(0, totalMonths);
+    const days = calendarDayDiff(anchor, startDate);
+
+    // Solo se informa cuando la inactividad supera un mes completo.
+    if (totalMonths < 1 || (totalMonths === 1 && days === 0)) return null;
+
+    return {
+        years: Math.floor(totalMonths / 12),
+        months: totalMonths % 12,
+        days
+    };
 }
 
 function detectSourceDirection(items) {
@@ -147,9 +176,28 @@ function detectSourceDirection(items) {
     return ascending > descending ? 'asc' : 'desc';
 }
 
-function inactivityObservation(months) {
-    if (months < 1) return '';
-    return `Se detecta un periodo de inactividad laboral de ${months} ${months === 1 ? 'mes' : 'meses'} respecto del empleo anterior.`;
+function formatInactivityPeriod(duration) {
+    if (!duration) return '';
+
+    const parts = [];
+    if (duration.years) {
+        parts.push(`${duration.years === 1 ? 'un' : duration.years} ${duration.years === 1 ? 'año' : 'años'}`);
+    }
+    if (duration.months) {
+        parts.push(`${duration.months === 1 ? 'un' : duration.months} ${duration.months === 1 ? 'mes' : 'meses'}`);
+    }
+
+    if (!parts.length) return '';
+    if (parts.length === 1) return parts[0];
+    return `${parts[0]} y ${parts[1]}`;
+}
+
+function inactivityObservation(duration) {
+    const period = formatInactivityPeriod(duration);
+    if (!period) return '';
+
+    const qualifier = duration.days > 0 ? 'mayor a ' : 'de ';
+    return `Se detectó un periodo de inactividad laboral ${qualifier}${period} respecto del empleo anterior.`;
 }
 
 export function buildInstitutionalOutput(headers = [], rows = []) {
@@ -263,12 +311,23 @@ export function buildInstitutionalOutput(headers = [], rows = []) {
             };
         });
 
+        // El universo de esta herramienta corresponde a personas actualmente
+        // activas en la institución. El periodo cronológicamente más reciente
+        // se presenta como vigente, aunque el corte RUSP traiga una fecha fin.
+        if (periods.length) {
+            const latest = periods[periods.length - 1];
+            latest.end = 'A la fecha';
+            latest.row[4] = 'A la fecha';
+        }
+
+        // Las observaciones se colocan en el empleo posterior y siempre se
+        // comparan contra el empleo inmediatamente anterior. El primer empleo
+        // cronológico no lleva comentario de inactividad.
         periods.forEach((period, index) => {
-            if (index > 0) {
-                const previous = periods[index - 1];
-                const inactiveMonths = calculateInactivityMonths(previous.end, period.start);
-                period.row[7] = inactivityObservation(inactiveMonths);
-            }
+            if (index === 0) return;
+            const previous = periods[index - 1];
+            const inactivity = calculateInactivityDuration(previous.end, period.start);
+            period.row[7] = inactivityObservation(inactivity);
         });
 
         const orderedPeriods = sourceDirection === 'desc' ? [...periods].reverse() : periods;
