@@ -37,15 +37,23 @@ test('aplica capitalización institucional inteligente', () => {
     );
 });
 
-test('normaliza sugerencias de inicio al 16 y término al 15', () => {
-    assert.equal(calculateSuggestedDate('01/01/2025', 'inicio'), '16/01/2025');
-    assert.equal(calculateSuggestedDate('20/01/2025', 'inicio'), '16/02/2025');
-    assert.equal(calculateSuggestedDate('15/01/2025', 'termino'), '15/01/2025');
-    assert.equal(calculateSuggestedDate('16/01/2025', 'termino'), '15/02/2025');
-    assert.equal(calculateSuggestedDate('31/12/2025', 'termino'), '15/01/2026');
+test('normaliza sugerencias de inicio a la frontera quincenal más cercana', () => {
+    assert.equal(calculateSuggestedDate('01/12/2024', 'inicio'), '01/12/2024');
+    assert.equal(calculateSuggestedDate('14/02/2025', 'inicio'), '16/02/2025');
+    assert.equal(calculateSuggestedDate('17/05/2024', 'inicio'), '16/05/2024');
 });
 
-test('usa fallback 15/16 cuando no existe una baja explícita', () => {
+test('normaliza sugerencias de término al 15 o al último día real del mes', () => {
+    assert.equal(calculateSuggestedDate('13/02/2025', 'termino'), '15/02/2025');
+    assert.equal(calculateSuggestedDate('15/01/2025', 'termino'), '15/01/2025');
+    assert.equal(calculateSuggestedDate('16/05/2024', 'termino'), '15/05/2024');
+    assert.equal(calculateSuggestedDate('30/07/2026', 'termino'), '31/07/2026');
+    assert.equal(calculateSuggestedDate('28/06/2025', 'termino'), '30/06/2025');
+    assert.equal(calculateSuggestedDate('28/02/2025', 'termino'), '28/02/2025');
+    assert.equal(calculateSuggestedDate('28/02/2024', 'termino'), '29/02/2024');
+});
+
+test('usa el día anterior al siguiente inicio cuando no existe una baja explícita', () => {
     const headers = [
         'rfc',
         'institucion',
@@ -63,9 +71,9 @@ test('usa fallback 15/16 cuando no existe una baja explícita', () => {
     const output = buildInstitutionalOutput(headers, rows);
     const chronological = [...output.rows].sort((a, b) => a[3].localeCompare(b[3]));
 
-    assert.equal(chronological[0][3], '16/01/2024');
-    assert.equal(chronological[0][4], '15/01/2025');
-    assert.equal(chronological[1][3], '16/01/2025');
+    assert.equal(chronological[0][3], '01/01/2024');
+    assert.equal(chronological[0][4], '31/12/2024');
+    assert.equal(chronological[1][3], '01/01/2025');
     assert.equal(chronological[1][4], 'A la fecha');
 });
 
