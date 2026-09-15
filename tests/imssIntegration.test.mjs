@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
     combineInstitutionalOutputs,
+    extractTextFromImssPdf,
     isImssWeeksReport,
     mapImssHistoryToInstitutional,
     parseImssWeeksText
@@ -40,6 +41,64 @@ $ 725.00
 Importante
 `;
 
+const OCR_IMSS_TEXT = `
+gob.mx
+Instituto Mexicano del Seguro Social
+Constancia de Semanas Cotizadas en el IMSS e
+historial de registros afiliatorios de la persona asegurada
+Estimado(a), Fecha de emisión del reporte
+PERSONA DE PRUEBA 05 / 08 / 2025
+DD_ MM vYYYY
+NSS: 12345678901 Total de semanas cotizadas
+CURP: GORJ900101HDFXXX01 353
+Tu detalle de semanas cotizadas
+Semanas cotizadas IMSS 353
+Tu historia laboral
+Nombre del patrón EMPRESA DEMO SA DE CV
+Registro Patronal (602756110
+Entidad federativa MÉXICO
+Fecha de alta 01/11/2019 Fecha de baja 29/02/2020 Salario Base de Cotización * $ 154.33
+Importante
+`;
+
+function makeFile() {
+    return {
+        name: 'constancia.pdf',
+        async arrayBuffer() {
+            return new ArrayBuffer(8);
+        }
+    };
+}
+
+function makePdfjs(nativeText, { pages = 1 } = {}) {
+    return {
+        getDocument() {
+            return {
+                promise: Promise.resolve({
+                    numPages: pages,
+                    async getPage() {
+                        return {
+                            async getTextContent() {
+                                return {
+                                    items: nativeText
+                                        ? [{ str: nativeText, transform: [1, 0, 0, 1, 0, 0] }]
+                                        : []
+                                };
+                            },
+                            getViewport({ scale }) {
+                                return { width: 100 * scale, height: 120 * scale };
+                            },
+                            render() {
+                                return { promise: Promise.resolve() };
+                            }
+                        };
+                    }
+                })
+            };
+        }
+    };
+}
+
 test('reconoce una constancia de semanas cotizadas IMSS por contenido', () => {
     assert.equal(isImssWeeksReport(SAMPLE_IMSS_TEXT), true);
     assert.equal(isImssWeeksReport('documento PDF sin historia laboral'), false);
@@ -63,6 +122,63 @@ test('extrae historial IMSS con altas, bajas, patrón y SBC', () => {
 
     assert.equal(parsed.history[1].endDate, 'A la fecha');
     assert.equal(parsed.history[1].contributionBaseSalary, 725);
+});
+
+test('tolera el orden de texto que produce OCR en una constancia impresa', () => {
+    const parsed = parseImssWeeksText(OCR_IMSS_TEXT);
+
+    assert.equal(parsed.personal.name, 'Persona de Prueba');
+    assert.equal(parsed.personal.reportDate, '05/08/2025');
+    assert.equal(parsed.personal.totalWeeks, 353);
+    assert.equal(parsed.history.length, 1);
+    assert.equal(parsed.history[0].registration, 'C602756110');
+    assert.equal(parsed.history[0].startDate, '01/11/2019');
+    assert.equal(parsed.history[0].endDate, '29/02/2020');
+    assert.equal(parsed.history[0].contributionBaseSalary, 154.33);
+});
+
+test('mantiene la ruta PDF.js existente y no invoca OCR cuando el PDF ya tiene texto válido', async () => {
+    let ocrCalls = 0;
+
+    const text = await extractTextFromImssPdf(makeFile(), {
+        pdfjsLib: makePdfjs(SAMPLE_IMSS_TEXT),
+        createOcrWorker: async () => {
+            ocrCalls += 1;
+            throw new Error('OCR no debe ejecutarse');
+        }
+    });
+
+    assert.equal(isImssWeeksReport(text), true);
+    assert.equal(ocrCalls, 0);
+});
+
+test('usa OCR solo como fallback cuando el PDF no contiene capa de texto', async () => {
+    let recognizeCalls = 0;
+    let terminated = false;
+
+    const text = await extractTextFromImssPdf(makeFile(), {
+        pdfjsLib: makePdfjs(''),
+        createCanvas: () => ({
+            getContext: () => ({})
+        }),
+        createOcrWorker: async () => ({
+            async recognize() {
+                recognizeCalls += 1;
+                return { data: { text: OCR_IMSS_TEXT } };
+            },
+            async terminate() {
+                terminated = true;
+            }
+        })
+    });
+
+    assert.equal(isImssWeeksReport(text), true);
+    assert.equal(recognizeCalls, 1);
+    assert.equal(terminated, true);
+
+    const parsed = parseImssWeeksText(text);
+    assert.equal(parsed.personal.totalWeeks, 353);
+    assert.equal(parsed.history[0].employer, 'EMPRESA DEMO SA DE CV');
 });
 
 test('mapea IMSS directamente a las ocho columnas institucionales sin inventar puesto ni sector', () => {
